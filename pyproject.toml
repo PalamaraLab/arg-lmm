@@ -1,0 +1,33 @@
+[project]
+name = "arg-lmm"
+version = "0.1.0"
+description = "Efficient complex trait analyses from ARG"
+readme = "README.md"
+authors = [
+    { name = "arg-lmm developers" }
+]
+requires-python = ">=3.9"
+dependencies = [
+    "arg-needle-lib"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+arg-lmm = "arg_lmm:main"
+
+[build-system]
+requires = ["hatchling", "hatch-fancy-pypi-readme"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README_PyPI.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "CHANGELOG.md"
