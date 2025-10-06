@@ -27,15 +27,63 @@ Requires arg-needle-lib:
 
 ### troubleshoot
 
-The C++ `chi2comb` library is required when installing the `chiscore` package.
+The `chiscore` package depends upon the C++ `chi2comb` library which at present
+needs to be built manually, requiring CMake, python3-dev and libffi-dev on your
+machine. It can either build manually by cloning `https://github.com/limix/chi2comb.git`
+and building with cmake or using their install script via `curl`.
+
+By default `chi2comb` attempts to install to system libraries which you may not
+have permission to write to. To circumvent this you can set `CHI2COMB_INSTALL_PREFIX`
+to build into a custom install location that contains lib and include files.
+This must be an absolute path or the script will delete it.
+
+You may also need to set `LD_LIBRARY_PATH` so Python can find the built binaries
+which is set in the shell in the example below but could be set in your venv.
+
+Depending on your CMake version, you may have to set `CMAKE_POLICY_VERSION_MINIMUM=3.5`.
+
+This example build uses `--no-deps` to ensure that only the missing binary is built:
+
+```bash
+# Load required modules and create a clean environment
+module load Python/3.11
+module load CMake
+python -m venv .venv
+source .venv/bin/activate
+
+# Build chi2comb binary to custom location using online installer. Note on BMRC
+# you'll get a privileges warning on the last step 5 of this install script but
+# you can Ctrl-C out; the install files will have already been written.
+mkdir chi2comb_install
+export CHI2COMB_INSTALL_PREFIX=$(realpath chi2comb_install)
+bash <(curl -fsSL https://raw.githubusercontent.com/limix/chi2comb/master/install)
+
+# Install chi2comb python linking to built files
+pip install \
+    --no-deps \
+    --global-option=build_ext \
+    --global-option="-I$CHI2COMB_INSTALL_PREFIX/include/" \
+    --global-option="-L$CHI2COMB_INSTALL_PREFIX/lib/" \
+    chi2comb
+
+# With chi2comb built, chiscore can be installed directly from wheels
+pip install chiscore
+
+# Add built .so files to library search path
+export LD_LIBRARY_PATH=$CHI2COMB_INSTALL_PREFIX/lib/:$LD_LIBRARY_PATH
 ```
-git clone https://github.com/limix/chi2comb.git
 
-cd chi2comb
+If you have full privileges it's much simpler, for example build in docker Ubuntu:
 
-CHI2COMB_INSTALL_PREFIX=<prefix> ./install
-
-pip install --global-option=build_ext --global-option="-I<prefix>/include/" --global-option="-L<prefix>/lib/" chiscore
+```bash
+export DEBIAN_FRONTEND=noninteractive # Avoid python install prompts
+apt update
+apt install -y python3 python3-venv curl cmake libffi-dev python3-dev
+export CMAKE_POLICY_VERSION_MINIMUM=3.5
+bash <(curl -fsSL https://raw.githubusercontent.com/limix/chi2comb/master/install)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install chiscore # chi2comb dep uses system libchi2comb /usr/local/lib
 ```
 
 ## 2. ARG-based calculation of BLUP or LOCO residuals for association testing
