@@ -1,11 +1,19 @@
-import argparse
+import logging
 import time
-import scipy.stats
-import scipy.special
+
 import arg_needle_lib
-import numpy as np
-import pandas as pd
 from chiscore import liu_sf
+import click
+import numpy as np
+import scipy.stats
+
+
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
 def rsvd(
@@ -260,40 +268,44 @@ def arg_rhe_with_error(arg, Traits, alpha=-1, nVectors=200, diploid=True, debug=
     return sigma_g_hat, sigma_e_hat, pvals
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--arg", action="store", dest="arg_path")
-    parser.add_argument("--pheno", action="store", dest="phe_path")
-    parser.add_argument("--out", '-o', action="store", dest="out")
-    parser.add_argument("--mu", action="store", dest="mu", default=1e-6, type=float)
-    parser.add_argument(
-        "--alpha", action="store", dest="alpha", default=-1.0, type=float
-    )
-    parser.add_argument("--mac", action="store", dest="mac", default=1, type=float)
-    parser.add_argument("--seed", action="store", dest="seed", default=42, type=int)
+@click.command()
+@click.option("--arg", "arg_path", required=True, help="Input argn file")
+@click.option("--pheno", "phe_path", required=True, help="Input phenotypes file")
+@click.option("--out", "-o", required=True, help="Output file")
+@click.option("--mu", default=1e-6, type=float, help="Mutation resampling rate")
+@click.option("--alpha", default=-1.0, type=float, help="Alpha normalising exponent")
+@click.option("--mac", default=1, type=float, help="Minimal MAC of resampled mutations to include")
+@click.option("--seed", default=42, type=int, help="Random seed for reproducibility")
+def arg_rhe(arg_path, phe_path, out, mu, alpha, mac, seed):
+    start_time = time.time()
+    logger.info(f"Starting arg_rhe with following parameters:")
+    logger.info(f"  arg:        {arg_path}")
+    logger.info(f"  phe:        {phe_path}")
+    logger.info(f"  out:        {out}")
+    logger.info(f"  mu:         {mu}")
+    logger.info(f"  alpha:      {alpha}")
+    logger.info(f"  mac:        {mac}")
+    logger.info(f"  seed:       {seed}")
 
-    args = parser.parse_args()
-    print("command line options:")
-    print(args)
-
-    arg = arg_needle_lib.deserialize_arg_cpp(args.arg_path)
+    arg = arg_needle_lib.deserialize_arg_cpp(arg_path)
     arg.populate_children_and_roots()
-    arg_needle_lib.generate_mutations(arg, args.mu, args.seed)
+    arg_needle_lib.generate_mutations(arg, mu, seed)
     arg.populate_mutations_on_edges()
     arg_needle_lib.prepare_multiplication(arg)
     arg.keep_mutations_within_maf(
-        args.mac / arg.num_samples(), 1.0 - args.mac / arg.num_samples()
+        mac / arg.num_samples(), 1.0 - mac / arg.num_samples()
     )
     arg.populate_mutations_on_edges()
     arg_needle_lib.prepare_multiplication(arg)
 
-    phenotypes = np.loadtxt(args.phe_path)[:, 2:]
+    phenotypes = np.loadtxt(phe_path)[:, 2:]
     phenotypes /= phenotypes.std(axis=0, keepdims=True)
 
-    rng = np.random.default_rng(args.seed)
+    # FIXME seed not used
+    rng = np.random.default_rng(seed)
 
     sigma_g_hat, sigma_e_hat, pval = arg_rhe_with_error(
-        arg, phenotypes, alpha=args.alpha, diploid=True
+        arg, phenotypes, alpha=alpha, diploid=True
     )
 
     df = pd.DataFrame(
@@ -303,4 +315,6 @@ if __name__ == "__main__":
             "P": pval,
         }
     )
-    df.to_csv(args.out, index=None)
+    df.to_csv(out, index=None)
+
+    logger.info(f"Done, in {time.time() - start_time} seconds")

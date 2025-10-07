@@ -8,7 +8,8 @@ authors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "arg-needle-lib"
+    "arg-needle-lib",
+    #"chiscore" # Manual install process required, see README
 ]
 
 [project.optional-dependencies]
@@ -17,7 +18,7 @@ dev = [
 ]
 
 [project.scripts]
-arg-lmm = "arg_lmm:main"
+arg-rhe = "arg_lmm.arg_rhe:arg_rhe"
 
 [build-system]
 requires = ["hatchling", "hatch-fancy-pypi-readme"]
