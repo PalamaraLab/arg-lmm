@@ -86,6 +86,15 @@ source .venv/bin/activate
 pip install chiscore # chi2comb dep uses system libchi2comb /usr/local/lib
 ```
 
+Other potential build issues:
+
+- If you have `--global-option` warnings during chi2comb install, run
+`pip install --upgrade pip setuptools wheel`.
+- For deeper binary issues , fall back to git cloning `chi2comb`, build with
+CMake and setting the include and lib paths to the repo's include dir and CMake
+build dir respectively. This will allow more control over the binary, for
+example will allow fixing rpaths on macOS using `install_name_tool`.
+
 ## 2. ARG-based calculation of BLUP or LOCO residuals for association testing
 > arg_lmm.py
 
