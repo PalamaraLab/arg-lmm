@@ -2,7 +2,7 @@ import logging
 import time
 
 import arg_needle_lib
-from chiscore import liu_sf
+from .third_party.chiscore.liu import liu_sf
 import click
 import numpy as np
 import scipy.stats

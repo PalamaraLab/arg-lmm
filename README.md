@@ -25,76 +25,6 @@ Requires arg-needle-lib:
 
 `python arg_rhe.py --arg demo_files/10kb_region_20k_samples.argn --pheno demo_files/h2_5e-03_alpha_-0.5.phenos --out demo_files/output.csv --mu 1e-6 --alpha -0.5 --mac 1 --seed 42`
 
-### troubleshoot
-
-The `chiscore` package depends upon the C++ `chi2comb` library which at present
-needs to be built manually, requiring CMake, python3-dev and libffi-dev on your
-machine. It can either build manually by cloning `https://github.com/limix/chi2comb.git`
-and building with cmake or using their install script via `curl`.
-
-By default `chi2comb` attempts to install to system libraries which you may not
-have permission to write to. To circumvent this you can set `CHI2COMB_INSTALL_PREFIX`
-to build into a custom install location that contains lib and include files.
-This must be an absolute path or the script will delete it.
-
-You may also need to set `LD_LIBRARY_PATH` so Python can find the built binaries
-which is set in the shell in the example below but could be set in your venv.
-
-Depending on your CMake version, you may have to set `CMAKE_POLICY_VERSION_MINIMUM=3.5`.
-
-This example build uses `--no-deps` to ensure that only the missing binary is built:
-
-```bash
-# Load required modules and create a clean environment
-module load Python/3.11
-module load CMake
-python -m venv .venv
-source .venv/bin/activate
-
-# Build chi2comb binary to custom location using online installer. Note on BMRC
-# you'll get a privileges warning on the last step 5 of this install script but
-# you can Ctrl-C out; the install files will have already been written.
-mkdir chi2comb_install
-export CHI2COMB_INSTALL_PREFIX=$(realpath chi2comb_install)
-bash <(curl -fsSL https://raw.githubusercontent.com/limix/chi2comb/master/install)
-
-# Install chi2comb python linking to built files
-pip install \
-    --no-deps \
-    --global-option=build_ext \
-    --global-option="-I$CHI2COMB_INSTALL_PREFIX/include/" \
-    --global-option="-L$CHI2COMB_INSTALL_PREFIX/lib/" \
-    chi2comb
-
-# With chi2comb built, chiscore can be installed directly from wheels
-pip install chiscore
-
-# Add built .so files to library search path
-export LD_LIBRARY_PATH=$CHI2COMB_INSTALL_PREFIX/lib/:$LD_LIBRARY_PATH
-```
-
-If you have full privileges it's much simpler, for example build in docker Ubuntu:
-
-```bash
-export DEBIAN_FRONTEND=noninteractive # Avoid python install prompts
-apt update
-apt install -y python3 python3-venv curl cmake libffi-dev python3-dev
-export CMAKE_POLICY_VERSION_MINIMUM=3.5
-bash <(curl -fsSL https://raw.githubusercontent.com/limix/chi2comb/master/install)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install chiscore # chi2comb dep uses system libchi2comb /usr/local/lib
-```
-
-Other potential build issues:
-
-- If you have `--global-option` warnings during chi2comb install, run
-`pip install --upgrade pip setuptools wheel`.
-- For deeper binary issues , fall back to git cloning `chi2comb`, build with
-CMake and setting the include and lib paths to the repo's include dir and CMake
-build dir respectively. This will allow more control over the binary, for
-example will allow fixing rpaths on macOS using `install_name_tool`.
-
 ## 2. ARG-based calculation of BLUP or LOCO residuals for association testing
 > arg_lmm.py
 
@@ -122,6 +52,10 @@ This python module can be used to calculate the leave-one-chromosome-out (LOCO) 
 
 We provide simulated ARGs (one per hypothetical chromosome) and five phenotypes for 5,000 diploid samples in `demo_files`, generated after assuming 10 chromosomes and h2=0.25.
 
+## Licenses
+
+The `liu_sf` method is directly copied from `chiscore` under MIT License rather
+than using PyPI due to a broken `chi2comb` dependency.
 
 ## Citation
 > Zhu, Kalantzis, et al. (2025), "Fast variance component analysis using large-scale ancestral recombination graphs"

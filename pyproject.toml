@@ -9,7 +9,6 @@ authors = [
 requires-python = ">=3.9"
 dependencies = [
     "arg-needle-lib",
-    #"chiscore" # Manual install process required, see README
 ]
 
 [project.optional-dependencies]
