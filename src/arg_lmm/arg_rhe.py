@@ -5,6 +5,7 @@ import arg_needle_lib
 from .third_party.chiscore.liu import liu_sf
 import click
 import numpy as np
+import pandas as pd
 import scipy.stats
 
 
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def rsvd(
-    arg, rank, n_oversamples=None, n_subspace_iters=None, alpha=-1
+    arg, rank, rng, n_oversamples=None, n_subspace_iters=None, alpha=-1
 ):
     """Randomized SVD (p. 227 of Halko et al).
 
@@ -35,7 +36,7 @@ def rsvd(
         n_samples = rank + n_oversamples
 
     # Stage A.
-    Q = find_range(arg, n_samples, n_subspace_iters, alpha)
+    Q = find_range(arg, n_samples, rng, n_subspace_iters, alpha)
 
     # Stage B.
     B = arg_needle_lib.ARG_by_matrix_multiply_muts(
@@ -49,7 +50,7 @@ def rsvd(
 # ------------------------------------------------------------------------------
 
 
-def find_range(arg, n_samples, n_subspace_iters=None, alpha=-1):
+def find_range(arg, n_samples, rng, n_subspace_iters=None, alpha=-1):
     """Algorithm 4.1: Randomized range finder (p. 240 of Halko et al).
 
     Given a matrix A and a number of samples, computes an orthonormal matrix
@@ -117,6 +118,7 @@ def ortho_basis(M):
 
 def cumulant_est(
     arg,
+    rng,
     alpha=-1,
     nVectors=200,
     diploid=True,
@@ -186,7 +188,7 @@ def chi2_pval(q, lam, dof):
     return scipy.stats.norm.sf(w + np.log(v / w) / w)
 
 
-def arg_rhe_with_error(arg, Traits, alpha=-1, nVectors=200, diploid=True, debug=True):
+def arg_rhe_with_error(arg, Traits, rng, alpha=-1, nVectors=200, diploid=True, debug=True):
     """
     Estimates for heritability and environment using RHE-reg as in Yue Wu and S. Sankararaman (2018),
     ie, for one genetic component.
@@ -200,7 +202,7 @@ def arg_rhe_with_error(arg, Traits, alpha=-1, nVectors=200, diploid=True, debug=
         t_trace = time.time()
         print("estimating trace of GRM...", end=" ", flush=True)
     factor, trace_K2 = cumulant_est(
-        arg, nVectors=nVectors, alpha=alpha, diploid=diploid, debug=debug
+        arg, rng, nVectors=nVectors, alpha=alpha, diploid=diploid, debug=debug
     )
     if debug:
         print(f"done [{time.time()-t_trace:.1f}s]", flush=True)
@@ -225,7 +227,7 @@ def arg_rhe_with_error(arg, Traits, alpha=-1, nVectors=200, diploid=True, debug=
         t_svd = time.time()
         print("estimating leading eigenvalues of GRM...", end=" ", flush=True)
 
-    sigvals = rsvd(arg, 200, n_subspace_iters=0, alpha=alpha)
+    sigvals = rsvd(arg, 200, rng, n_subspace_iters=0, alpha=alpha)
 
     if debug:
         print(f"done [{time.time()-t_svd:.1f}s]", flush=True)
@@ -287,7 +289,7 @@ def arg_rhe(arg_path, phe_path, out, mu, alpha, mac, seed):
     logger.info(f"  mac:        {mac}")
     logger.info(f"  seed:       {seed}")
 
-    arg = arg_needle_lib.deserialize_arg_cpp(arg_path)
+    arg = arg_needle_lib.deserialize_arg(arg_path)
     arg.populate_children_and_roots()
     arg_needle_lib.generate_mutations(arg, mu, seed)
     arg.populate_mutations_on_edges()
@@ -301,11 +303,10 @@ def arg_rhe(arg_path, phe_path, out, mu, alpha, mac, seed):
     phenotypes = np.loadtxt(phe_path)[:, 2:]
     phenotypes /= phenotypes.std(axis=0, keepdims=True)
 
-    # FIXME seed not used
     rng = np.random.default_rng(seed)
 
     sigma_g_hat, sigma_e_hat, pval = arg_rhe_with_error(
-        arg, phenotypes, alpha=alpha, diploid=True
+        arg, phenotypes, rng, alpha=alpha, diploid=True
     )
 
     df = pd.DataFrame(
