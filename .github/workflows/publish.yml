@@ -22,10 +22,11 @@ jobs:
         run: uv python install 3.13
       - name: Build
         run: uv build
-      # Check that basic features work and we didn't fail to include crucial files
-      - name: Smoke test (wheel)
-        run: uv run --isolated --no-project --with dist/*.whl tests/smoke_test.py
-      - name: Smoke test (source distribution)
-        run: uv run --isolated --no-project --with dist/*.tar.gz tests/smoke_test.py
-      - name: Publish
-        run: uv publish
+      - name: Smoke test
+        run: |
+          uv sync
+          arg-lmm demo_files/sims.N5000.chr{1..10}.arg --pheno demo_files/sims.N5000.phenotypes --out demo_files/arg_loco.new --blup
+          arg-lmm --rhe demo_files/10kb_region_20k_samples.argn --pheno demo_files/h2_5e-03_alpha_-0.5.phenos --out demo_files/output.csv --mu 1e-6 --alpha -0.5 --mac 1 --seed 42
+      # FIXME commented out whilst smoke testing
+      # - name: Publish
+      #   run: uv publish
