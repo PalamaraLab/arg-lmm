@@ -17,7 +17,7 @@ dev = [
 ]
 
 [project.scripts]
-arg-rhe = "arg_lmm.arg_rhe:arg_rhe"
+arg-lmm = "arg_lmm.__main__:arg_lmm"
 
 [build-system]
 requires = ["hatchling", "hatch-fancy-pypi-readme"]

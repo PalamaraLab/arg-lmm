@@ -1,25 +1,13 @@
-import logging
 import time
 
 import arg_needle_lib
 from .third_party.chiscore.liu import liu_sf
-import click
 import numpy as np
 import pandas as pd
 import scipy.stats
 
 
-logging.basicConfig(
-    format='%(asctime)s %(levelname)-8s %(message)s',
-    level=logging.INFO,
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-logger = logging.getLogger(__name__)
-
-
-def rsvd(
-    arg, rank, rng, n_oversamples=None, n_subspace_iters=None, alpha=-1
-):
+def rsvd(arg, rank, rng, n_oversamples=None, n_subspace_iters=None, alpha=-1):
     """Randomized SVD (p. 227 of Halko et al).
 
     :param arg:              ARG-needle arg object.
@@ -39,15 +27,12 @@ def rsvd(
     Q = find_range(arg, n_samples, rng, n_subspace_iters, alpha)
 
     # Stage B.
-    B = arg_needle_lib.ARG_by_matrix_multiply_muts(
-        arg, Q.T, standardize=True, alpha=alpha, diploid=True
+    B = arg_needle_lib.arg_matmul(
+        arg, Q.T, standardize=True, alpha=alpha, diploid=True, axis="mutations"
     )
     S = np.linalg.svd(B, compute_uv=False)
 
     return S[:rank]
-
-
-# ------------------------------------------------------------------------------
 
 
 def find_range(arg, n_samples, rng, n_subspace_iters=None, alpha=-1):
@@ -64,17 +49,14 @@ def find_range(arg, n_samples, rng, n_subspace_iters=None, alpha=-1):
     """
     m, n = arg.num_samples() // 2, arg.num_mutations()
     O = rng.normal(size=(n, n_samples))
-    Y = arg_needle_lib.ARG_by_matrix_multiply_samples(
-        arg, O, standardize=True, alpha=alpha, diploid=True
+    Y = arg_needle_lib.arg_matmul(
+        arg, O, standardize=True, alpha=alpha, diploid=True, axis="samples"
     )
 
     if n_subspace_iters:
         return subspace_iter(arg, Y, n_subspace_iters, alpha)
     else:
         return ortho_basis(Y)
-
-
-# ------------------------------------------------------------------------------
 
 
 def subspace_iter(arg, Y0, n_iters, alpha=-1):
@@ -92,18 +74,15 @@ def subspace_iter(arg, Y0, n_iters, alpha=-1):
     """
     Q = ortho_basis(Y0)
     for _ in range(n_iters):
-        Z = arg_needle_lib.ARG_by_matrix_multiply_muts(
-            arg, Q.T, standardize=True, alpha=alpha, diploid=True
+        Z = arg_needle_lib.arg_matmul(
+            arg, Q.T, standardize=True, alpha=alpha, diploid=True, axis="mutations"
         ).T
         Q = ortho_basis(
-            arg_needle_lib.ARG_by_matrix_multiply_samples(
-                arg, Z, standardize=True, alpha=alpha, diploid=True
+            arg_needle_lib.arg_matmul(
+                arg, Z, standardize=True, alpha=alpha, diploid=True, axis="samples"
             )
         )
     return Q
-
-
-# ------------------------------------------------------------------------------
 
 
 def ortho_basis(M):
@@ -135,8 +114,8 @@ def cumulant_est(
     Z = rng.normal(0, 1, size=(N, nVectors))
     results = np.zeros(2)
 
-    U = arg_needle_lib.ARG_by_matrix_multiply_muts(
-        arg, Z.T, standardize=True, alpha=alpha, diploid=diploid
+    U = arg_needle_lib.arg_matmul(
+        arg, Z.T, standardize=True, alpha=alpha, diploid=diploid, axis="mutations"
     ).T
     trace_K = np.linalg.norm(U) ** 2 / nVectors
 
@@ -144,8 +123,8 @@ def cumulant_est(
     factor = N / trace_K
     results[0] = factor
 
-    U = arg_needle_lib.ARG_by_matrix_multiply_samples(
-        arg, U, standardize=True, alpha=alpha, diploid=diploid
+    U = arg_needle_lib.arg_matmul(
+        arg, U, standardize=True, alpha=alpha, diploid=diploid, axis="samples"
     )
     trace_K2 = np.linalg.norm(U) ** 2 * (factor**2) / nVectors
     return factor, trace_K2
@@ -207,8 +186,8 @@ def arg_rhe_with_error(arg, Traits, rng, alpha=-1, nVectors=200, diploid=True, d
     if debug:
         print(f"done [{time.time()-t_trace:.1f}s]", flush=True)
 
-    GtY = arg_needle_lib.ARG_by_matrix_multiply_muts(
-        arg, Traits.T, standardize=True, alpha=alpha, diploid=diploid
+    GtY = arg_needle_lib.arg_matmul(
+        arg, Traits.T, standardize=True, alpha=alpha, diploid=diploid, axis="mutations"
     )
     YGGtY = np.linalg.norm(GtY, axis=1) ** 2
 
@@ -245,9 +224,6 @@ def arg_rhe_with_error(arg, Traits, rng, alpha=-1, nVectors=200, diploid=True, d
         s_dofs = [1] * sigvals.size
         s_coefs = sigvals.tolist()
 
-    # if debug:
-    #     print(f'{l1=}, {l2=}, {factor=}, {sigvals.sum()=}, {s_dofs=}, {s_coefs=}')
-
     pvals = np.zeros(N_pheno)
     for i in range(N_pheno):
 
@@ -270,37 +246,19 @@ def arg_rhe_with_error(arg, Traits, rng, alpha=-1, nVectors=200, diploid=True, d
     return sigma_g_hat, sigma_e_hat, pvals
 
 
-@click.command()
-@click.option("--arg", "arg_path", required=True, help="Input argn file")
-@click.option("--pheno", "phe_path", required=True, help="Input phenotypes file")
-@click.option("--out", "-o", required=True, help="Output file")
-@click.option("--mu", default=1e-6, type=float, help="Mutation resampling rate")
-@click.option("--alpha", default=-1.0, type=float, help="Alpha normalising exponent")
-@click.option("--mac", default=1, type=float, help="Minimal MAC of resampled mutations to include")
-@click.option("--seed", default=42, type=int, help="Random seed for reproducibility")
-def arg_rhe(arg_path, phe_path, out, mu, alpha, mac, seed):
-    start_time = time.time()
-    logger.info(f"Starting arg_rhe with following parameters:")
-    logger.info(f"  arg:        {arg_path}")
-    logger.info(f"  phe:        {phe_path}")
-    logger.info(f"  out:        {out}")
-    logger.info(f"  mu:         {mu}")
-    logger.info(f"  alpha:      {alpha}")
-    logger.info(f"  mac:        {mac}")
-    logger.info(f"  seed:       {seed}")
-
+def arg_rhe_main(arg_path, pheno_path, out, mu, alpha, mac, seed):
     arg = arg_needle_lib.deserialize_arg(arg_path)
     arg.populate_children_and_roots()
     arg_needle_lib.generate_mutations(arg, mu, seed)
     arg.populate_mutations_on_edges()
-    arg_needle_lib.prepare_multiplication(arg)
+    arg_needle_lib.prepare_matmul(arg)
     arg.keep_mutations_within_maf(
         mac / arg.num_samples(), 1.0 - mac / arg.num_samples()
     )
     arg.populate_mutations_on_edges()
-    arg_needle_lib.prepare_multiplication(arg)
+    arg_needle_lib.prepare_matmul(arg)
 
-    phenotypes = np.loadtxt(phe_path)[:, 2:]
+    phenotypes = np.loadtxt(pheno_path)[:, 2:]
     phenotypes /= phenotypes.std(axis=0, keepdims=True)
 
     rng = np.random.default_rng(seed)
@@ -317,5 +275,3 @@ def arg_rhe(arg_path, phe_path, out, mu, alpha, mac, seed):
         }
     )
     df.to_csv(out, index=None)
-
-    logger.info(f"Done, in {time.time() - start_time} seconds")
